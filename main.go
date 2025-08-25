@@ -4,27 +4,48 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
+	"net"
 	"strings"
+	"sync"
 )
 
 func main() {
-	file, err := os.Open("./message.txt")
+	listener, err := net.Listen("tcp", ":42069")
 	if err != nil {
-		log.Fatalf("failed top open file: %v", err)
+		log.Fatalf("failed to listen on port 42069: %v", err)
 	}
+	defer listener.Close()
+	var wg sync.WaitGroup
 	
-	for line := range getLineConnection(file) {
-		fmt.Printf("read: %s\n", line)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			wg.Wait()
+			log.Fatalf("error occured while waiting for network connection: %v", err)
+		}
+		
+		fmt.Println("connection accepted")
+		wg.Add(1)
+		
+		go func(conn io.ReadCloser) {
+			defer conn.Close()
+			defer wg.Done()
+			
+			for line := range getLinesChannel(conn) {
+				fmt.Printf("%s\n", line)
+			}
+			fmt.Println("connection closed")
+		}(conn)
 	}
 }
 
-func getLineConnection(f io.ReadCloser) <-chan string {
+func getLinesChannel(f io.ReadCloser) <-chan string {
 	c := make(chan string)
 
 	go func(f io.ReadCloser, c chan<- string) {
 		defer f.Close()
-
+		defer close(c)
+		
 		buf := make([]byte, 8)
 		var current strings.Builder
 		for {
@@ -33,7 +54,6 @@ func getLineConnection(f io.ReadCloser) <-chan string {
 				if current.String() != "" {
 					c <- current.String()
 				}
-				close(c)
 				break
 			}
 
