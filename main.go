@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 )
 
 func main() {
@@ -15,27 +14,19 @@ func main() {
 		log.Fatalf("failed to listen on port 42069: %v", err)
 	}
 	defer listener.Close()
-	var wg sync.WaitGroup
 	
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			wg.Wait()
 			log.Fatalf("error occured while waiting for network connection: %v", err)
 		}
 		
 		fmt.Println("connection accepted")
-		wg.Add(1)
-		
-		go func(conn io.ReadCloser) {
-			defer conn.Close()
-			defer wg.Done()
-			
-			for line := range getLinesChannel(conn) {
-				fmt.Printf("%s\n", line)
-			}
-			fmt.Println("connection closed")
-		}(conn)
+
+		for line := range getLinesChannel(conn) {
+			fmt.Printf("%s\n", line)
+		}
+		fmt.Println("connection closed")
 	}
 }
 
